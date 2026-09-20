@@ -1,0 +1,11 @@
+node_modules
+apps/*/node_modules
+.nuxt
+.output
+.astro
+apps/go-backend/.go
+.go
+main
+*.go.sum
+*.go.mod
+.env

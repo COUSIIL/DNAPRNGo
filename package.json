@@ -1,0 +1,18 @@
+{
+  "name": "my-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DevOps & Fullstack Boilerplate",
+  "scripts": {
+    "dev": "docker compose up",
+    "dev:build": "docker compose up --build",
+    "prod": "docker compose -f docker-compose.prod.yml up -d",
+    "prod:build": "docker compose -f docker-compose.prod.yml up -d --build",
+    "stop": "docker compose down",
+    "clean": "docker compose down -v --remove-orphans"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

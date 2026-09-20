@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - nuxt-app
+      - astro-app
+      - go-backend
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-monorepo_db}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  go-backend:
+    build:
+      context: ./apps/go-backend
+      dockerfile: Dockerfile
+      target: builder
+    command: sh -c "go run main.go"
+    volumes:
+      - ./apps/go-backend:/app
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-monorepo_db}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      API_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+
+  astro-app:
+    build:
+      context: .
+      dockerfile: apps/astro-app/Dockerfile
+      target: builder
+    # Override standard build to run dev server instead for hot-reloading
+    command: pnpm run dev
+    working_dir: /app/apps/astro-app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/astro-app/node_modules
+    ports:
+      - "4321:4321"
+
+  nuxt-app:
+    build:
+      context: .
+      dockerfile: apps/nuxt-app/Dockerfile
+      target: builder
+    # Override standard build to run dev server instead for hot-reloading
+    command: pnpm run dev
+    working_dir: /app/apps/nuxt-app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/nuxt-app/node_modules
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:
+  redis-data:
