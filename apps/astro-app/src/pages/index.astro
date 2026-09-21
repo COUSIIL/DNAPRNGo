@@ -1,38 +1,61 @@
 ---
 // Server-side logic here
-const API_URL = import.meta.env.API_URL || 'http://go-backend:8080/health';
-let apiStatus = 'Unknown';
+const API_URL = import.meta.env.API_URL || "http://go-backend:8080/health";
+let apiStatus = "Unknown";
 try {
-  const res = await fetch(API_URL);
-  const data = await res.json();
-  apiStatus = data.status === 'ok' ? 'Online' : 'Offline';
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    apiStatus = data.status === "ok" ? "Online" : "Offline";
 } catch (e) {
-  apiStatus = 'Unreachable';
+    apiStatus = "Unreachable";
 }
 ---
 
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro Monorepo Boilerplate</title>
-		<style>
-			body { font-family: system-ui, sans-serif; background: #13151a; color: white; padding: 2rem; }
-			h1 { color: #ff5d01; }
-			.status { background: #23262d; padding: 1rem; border-radius: 8px; border: 1px solid #444; }
-			.online { color: #4ade80; font-weight: bold; }
-			.offline { color: #f87171; font-weight: bold; }
-		</style>
-	</head>
-	<body>
-		<h1>Astro Landing Page</h1>
-		<p>Welcome to the DevOps Monorepo Boilerplate!</p>
+    <head>
+        <meta charset="utf-8" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <meta name="viewport" content="width=device-width" />
+        <meta name="generator" content={Astro.generator} />
+        <title>Astro Monorepo Boilerplate</title>
+        <style>
+            body {
+                font-family: system-ui, sans-serif;
+                background: #13151a;
+                color: white;
+                padding: 2rem;
+            }
+            h1 {
+                color: #ff5d01;
+            }
+            .status {
+                background: #23262d;
+                padding: 1rem;
+                border-radius: 8px;
+                border: 1px solid #444;
+            }
+            .online {
+                color: #4ade80;
+                font-weight: bold;
+            }
+            .offline {
+                color: #f87171;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Astro Landing Page</h1>
+        <p>Welcome to the DevOps Monorepo Boilerplate!</p>
 
-		<div class="status">
-			<p>API Status: <span class={apiStatus === 'Online' ? 'online' : 'offline'}>{apiStatus}</span></p>
-			<p>Server Time: {new Date().toISOString()}</p>
-		</div>
-	</body>
+        <div class="status">
+            <p>
+                API Status:{" "}
+                <span class={apiStatus === "Online" ? "online" : "offline"}>
+                    {apiStatus}
+                </span>
+            </p>
+            <p>Server Time: {new Date().toISOString()}</p>
+        </div>
+    </body>
 </html>

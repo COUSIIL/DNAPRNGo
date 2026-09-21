@@ -1,2 +1,7 @@
 packages:
   - "apps/*"
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - "@img/sharp-libvips-linuxmusl-x64"
