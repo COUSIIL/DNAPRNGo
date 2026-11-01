@@ -8,7 +8,7 @@ RUN go mod download
 
 # ---- Dev: hot reload with air (docker-compose target: dev) ----
 FROM base AS dev
-RUN go install github.com/air-verse/air@latest
+RUN go install github.com/air-verse/air@v1.61.7
 COPY . .
 CMD ["air", "-c", ".air.toml"]
 

@@ -1,15 +1,20 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 echo "========================================"
-echo " Starting VARQAI development environment"
+echo " Starting DEV development environment"
 echo "========================================"
 echo ""
 
 # --------------------------------------------------
 # 0. Configuration
 # --------------------------------------------------
+
+# Load .env (if present) so the values match docker-compose
+if [ -f .env ]; then
+    set -a; . ./.env; set +a
+fi
 
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 POSTGRES_DB="${POSTGRES_DB:-monorepo_db}"
@@ -57,7 +62,7 @@ fi
 echo "Executing database initialization..."
 
 docker compose exec -T postgres \
-    psql \
+    psql -v ON_ERROR_STOP=1 \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
     < "$INIT_SQL"
@@ -104,7 +109,7 @@ fi
 # 5. Start all services
 # --------------------------------------------------
 
-echo "Starting VARQAI services..."
+echo "Starting services..."
 
 docker compose up -d
 
@@ -130,10 +135,11 @@ echo "========================================"
 echo " Development URLs"
 echo "========================================"
 
-echo "Astro: http://localhost"
-echo "Nuxt:  http://app.localhost"
-echo "Center: http://center.localhost"
-echo "API:   http://api.localhost/health"
+echo "Astro:   http://localhost"
+echo "Nuxt:    http://app.localhost"
+echo "Center:  http://center.localhost"
+echo "API:     http://api.localhost/health"
+echo "pgAdmin: http://localhost:5050"
 
 echo ""
 

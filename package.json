@@ -2,7 +2,8 @@
   "name": "my-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "DevOps & Fullstack Boilerplate",
+  "description": "DevOps & Fullstack Boilerplate (Nuxt, Astro, Go, Postgres, Redis, Nginx)",
+  "packageManager": "pnpm@10.26.2",
   "scripts": {
     "dev": "docker compose up",
     "dev:build": "docker compose up --build",
@@ -13,6 +14,6 @@
   },
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
+    "pnpm": ">=10.0.0"
   }
 }

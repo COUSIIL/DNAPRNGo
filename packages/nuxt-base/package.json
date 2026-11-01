@@ -1,0 +1,9 @@
+{
+  "name": "@repo/nuxt-base",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Nuxt layer: common config and composables for every Nuxt app of the monorepo",
+  "main": "./nuxt.config.ts"
+}
+

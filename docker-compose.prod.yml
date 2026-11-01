@@ -1,52 +1,86 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-service: &service
+  restart: always
+  logging: *default-logging
+
 services:
+  # ---------------------------------------------------------------- Proxy / TLS
   nginx:
-    image: nginx:alpine
+    <<: *service
+    image: nginx:1.27-alpine
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # Domains are injected into nginx/prod.conf.template at startup
+      DOMAIN: ${DOMAIN}
+      APP_DOMAIN: ${APP_DOMAIN}
+      CENTER_DOMAIN: ${CENTER_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      NGINX_ENVSUBST_FILTER: "^(DOMAIN|APP_DOMAIN|CENTER_DOMAIN|API_DOMAIN)$$"
     volumes:
-      - ./nginx/prod.conf:/etc/nginx/conf.d/default.conf
-      - certbot-www:/var/www/certbot
-      - certbot-conf:/etc/letsencrypt
+      - ./nginx/prod.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-conf:/etc/letsencrypt:ro
     depends_on:
       - nuxt-app
       - nuxt-center
       - astro-app
       - go-backend
-    restart: always
 
   certbot:
+    <<: *service
     image: certbot/certbot
     volumes:
       - certbot-www:/var/www/certbot
       - certbot-conf:/etc/letsencrypt
-    # Command to run every 12 hours to renew certificates
+    # Renew certificates every 12 hours
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    restart: always
 
+  # ---------------------------------------------------------------- Data (internal network only)
   postgres:
+    <<: *service
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     volumes:
       - postgres-prod-data:/var/lib/postgresql/data
-    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   redis:
+    <<: *service
     image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-prod-data:/data
-    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
+  # ---------------------------------------------------------------- Apps
   go-backend:
+    <<: *service
     build:
       context: ./apps/go-backend
       dockerfile: Dockerfile
     env_file:
       - .env
     environment:
+      APP_ENV: production
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
@@ -55,63 +89,51 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       API_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       CORS_ALLOW_ORIGINS: https://${APP_DOMAIN},https://${CENTER_DOMAIN}
     depends_on:
-      - postgres
-      - redis
-    restart: always
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   astro-app:
+    <<: *service
     build:
       context: .
       dockerfile: apps/astro-app/Dockerfile
-    restart: always
 
   nuxt-app:
+    <<: *service
     build:
       context: .
-      dockerfile: apps/nuxt-app/Dockerfile
+      dockerfile: docker/nuxt.Dockerfile
+      target: runner
+      args:
+        APP: nuxt-app
     environment:
       NUXT_PUBLIC_API_BASE: https://${API_DOMAIN}
-    restart: always
+      NUXT_API_BASE_INTERNAL: http://go-backend:8080
 
   nuxt-center:
+    <<: *service
     build:
       context: .
-      dockerfile: apps/nuxt-center/Dockerfile
+      dockerfile: docker/nuxt.Dockerfile
+      target: runner
+      args:
+        APP: nuxt-center
     environment:
       NUXT_PUBLIC_API_BASE: https://${API_DOMAIN}
-    restart: always
+      NUXT_API_BASE_INTERNAL: http://go-backend:8080
 
-  varq-email-worker:
-    profiles: ["worker"]
-    build:
-      context: ./apps/go-backend
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    command: ["./worker"] # Assuming we build the worker binary in Dockerfile
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASS: ${SMTP_PASS}
-    depends_on:
-      - postgres
-      - redis
-    restart: always
-
+  # Docker UI, reachable only through an SSH tunnel (127.0.0.1).
+  # Disabled by default: it grants full control of the Docker daemon.
+  # Enable with: docker compose -f docker-compose.prod.yml --profile tools up -d
   portainer:
-    image: portainer/portainer-ce:latest
-    container_name: portainer-prod
-    restart: always
+    <<: *service
+    profiles: ["tools"]
+    image: portainer/portainer-ce:lts
     ports:
       - "127.0.0.1:9443:9443"
     volumes:

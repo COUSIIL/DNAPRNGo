@@ -1,9 +1,9 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 echo "========================================"
-echo " Stopping VARQAI development environment"
+echo " Stopping DEV development environment"
 echo "========================================"
 echo ""
 
@@ -11,7 +11,7 @@ echo ""
 # 1. Stop containers
 # --------------------------------------------------
 
-echo "Stopping VARQAI services..."
+echo "Stopping DEV services..."
 
 docker compose down
 
@@ -39,4 +39,4 @@ docker system df
 
 echo ""
 
-echo "VARQAI development environment stopped."
+echo "DEV development environment stopped."
