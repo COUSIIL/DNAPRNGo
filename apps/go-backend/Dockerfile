@@ -1,33 +1,30 @@
-# Build stage
-FROM golang:1.24-alpine AS builder
-
+# syntax=docker/dockerfile:1
+# ---- Base: dependencies ----
+FROM golang:1.24-alpine AS base
 WORKDIR /app
-
-# Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
-
 COPY go.mod go.sum ./
 RUN go mod download
 
+# ---- Dev: hot reload with air (docker-compose target: dev) ----
+FROM base AS dev
+RUN go install github.com/air-verse/air@latest
 COPY . .
+CMD ["air", "-c", ".air.toml"]
 
-# Build the application
-# CGO_ENABLED=0 ensures a static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+# ---- Build: static binary ----
+FROM base AS builder
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/main .
 
-# Final stage (Development & Production multi-stage handling via target)
-# We will just use the final lightweight image for both (hot reload is done via compose volume & command if needed, but for simplicity here's standard prod)
-
-FROM alpine:3.19
-
+# ---- Production ----
+FROM alpine:3.20 AS runner
+RUN apk --no-cache add ca-certificates tzdata wget \
+ && addgroup -S app && adduser -S app -G app
 WORKDIR /app
-
-# Add required runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata
-
-# Copy binary from builder
-COPY --from=builder /app/main .
-
+COPY --from=builder /out/main .
+USER app
 EXPOSE 8080
-
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1
 CMD ["./main"]

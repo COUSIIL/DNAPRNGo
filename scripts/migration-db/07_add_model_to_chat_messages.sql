@@ -1,0 +1,2 @@
+ALTER TABLE chat_messages
+ADD COLUMN model VARCHAR(100) NULL;

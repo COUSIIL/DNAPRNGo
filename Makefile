@@ -26,8 +26,7 @@ stop:
 	./scripts/stop.sh
 
 clean:
-	docker compose down -v --remove-orphans
-	docker compose -f docker-compose.prod.yml down -v --remove-orphans
+	./scripts/clean-docker.sh
 
 deploy:
 	./scripts/deploy.sh

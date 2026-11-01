@@ -1,4 +1,153 @@
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-monorepo_db}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin_app
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-change_me}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  go-backend:
+    build:
+      context: ./apps/go-backend
+      dockerfile: Dockerfile
+      target: dev
+    env_file:
+      - .env
+    command: air -c .air.toml
+    volumes:
+      - ./apps/go-backend:/app
+    environment:
+      API_ENV: development
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-monorepo_db}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      API_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://app.localhost,http://center.localhost,http://localhost}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  astro-app:
+    build:
+      context: .
+      dockerfile: apps/astro-app/Dockerfile
+      target: builder
+    command: pnpm run dev
+    working_dir: /app/apps/astro-app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/astro-app/node_modules
+    ports:
+      - "4321:4321"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  nuxt-app:
+    build:
+      context: .
+      dockerfile: apps/nuxt-app/Dockerfile
+      target: builder
+    command: pnpm run dev
+    working_dir: /app/apps/nuxt-app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/nuxt-app/node_modules
+    ports:
+      - "3000:3000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nuxt-center:
+    build:
+      context: .
+      dockerfile: apps/nuxt-center/Dockerfile
+      target: builder
+    command: pnpm run dev
+    working_dir: /app/apps/nuxt-center
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/nuxt-center/node_modules
+    ports:
+      - "3001:3000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   nginx:
     image: nginx:alpine
     ports:
@@ -7,34 +156,25 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - nuxt-app
+      - nuxt-center
       - astro-app
       - go-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
-      POSTGRES_DB: ${POSTGRES_DB:-monorepo_db}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-
-  go-backend:
+  # Requires a worker entrypoint + .air.worker.toml (not implemented yet): enable with --profile worker
+  varq-email-worker:
+    profiles: ["worker"]
     build:
       context: ./apps/go-backend
       dockerfile: Dockerfile
-      target: builder
-    command: sh -c "go run main.go"
+      target: dev
+    env_file:
+      - .env
+    command: air -c .air.worker.toml
     volumes:
       - ./apps/go-backend:/app
     environment:
@@ -45,43 +185,38 @@ services:
       POSTGRES_PORT: 5432
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      API_PORT: 8080
-    ports:
-      - "8080:8080"
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  astro-app:
-    build:
-      context: .
-      dockerfile: apps/astro-app/Dockerfile
-      target: builder
-    # Override standard build to run dev server instead for hot-reloading
-    command: pnpm run dev
-    working_dir: /app/apps/astro-app
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/apps/astro-app/node_modules
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: always
     ports:
-      - "4321:4321"
-
-  nuxt-app:
-    build:
-      context: .
-      dockerfile: apps/nuxt-app/Dockerfile
-      target: builder
-    # Override standard build to run dev server instead for hot-reloading
-    command: pnpm run dev
-    working_dir: /app/apps/nuxt-app
+      - "127.0.0.1:9443:9443"
     volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/apps/nuxt-app/node_modules
-    ports:
-      - "3000:3000"
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres-data:
   redis-data:
+  pgadmin-data:
+  portainer-data:

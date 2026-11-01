@@ -26,11 +26,36 @@ ssh -t ${SSH_USER}@${SERVER_IP} << EOF
     echo "4. Restarting containers (Zero-Downtime approach via remove-orphans)..."
     docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-    echo "5. Cleaning up old images..."
+    echo "5. Waiting for PostgreSQL to be ready..."
+    until docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "\${POSTGRES_USER:-postgres}" -d "\${POSTGRES_DB:-monorepo_db}" > /dev/null 2>&1; do
+        echo "PostgreSQL is not ready yet..."
+        sleep 2
+    done
+    echo "PostgreSQL is ready!"
+
+    echo "6. Applying database migrations..."
+    MIGRATIONS_DIR="./scripts/migration-db"
+    if [ -d "\$MIGRATIONS_DIR" ]; then
+        if ls "\$MIGRATIONS_DIR"/*.sql 1> /dev/null 2>&1; then
+            for migration_file in \$(ls "\$MIGRATIONS_DIR"/*.sql | sort); do
+                echo "Executing migration: \$migration_file"
+                docker compose -f docker-compose.prod.yml exec -T postgres \
+                    psql \
+                    -U "\${POSTGRES_USER:-postgres}" \
+                    -d "\${POSTGRES_DB:-monorepo_db}" \
+                    < "\$migration_file"
+            done
+            echo "Migrations applied successfully."
+        else
+            echo "No migration files found in \$MIGRATIONS_DIR."
+        fi
+    fi
+
+    echo "7. Cleaning up old images..."
     docker system prune -f
 EOF
 
-echo "6. Validating Deployment..."
+echo "8. Validating Deployment..."
 sleep 5 # Wait a few seconds for services to fully start
 
 # Check Health Endpoint

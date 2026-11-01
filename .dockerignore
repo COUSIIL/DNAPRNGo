@@ -5,3 +5,8 @@ apps/*/node_modules
 .astro
 apps/go-backend/.go
 .go
+.git
+.env
+.env.*
+*.md
+apps/go-backend/tmp

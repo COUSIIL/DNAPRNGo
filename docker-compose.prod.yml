@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   nginx:
     image: nginx:alpine
@@ -12,6 +10,7 @@ services:
       - certbot-conf:/etc/letsencrypt
     depends_on:
       - nuxt-app
+      - nuxt-center
       - astro-app
       - go-backend
     restart: always
@@ -26,14 +25,13 @@ services:
     restart: always
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres-prod-data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: always
 
   redis:
@@ -46,6 +44,8 @@ services:
     build:
       context: ./apps/go-backend
       dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -55,6 +55,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       API_PORT: 8080
+      CORS_ALLOW_ORIGINS: https://${APP_DOMAIN},https://${CENTER_DOMAIN}
     depends_on:
       - postgres
       - redis
@@ -74,8 +75,52 @@ services:
       NUXT_PUBLIC_API_BASE: https://${API_DOMAIN}
     restart: always
 
+  nuxt-center:
+    build:
+      context: .
+      dockerfile: apps/nuxt-center/Dockerfile
+    environment:
+      NUXT_PUBLIC_API_BASE: https://${API_DOMAIN}
+    restart: always
+
+  varq-email-worker:
+    profiles: ["worker"]
+    build:
+      context: ./apps/go-backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    command: ["./worker"] # Assuming we build the worker binary in Dockerfile
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer-prod
+    restart: always
+    ports:
+      - "127.0.0.1:9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-prod-data:/data
+
 volumes:
   postgres-prod-data:
   redis-prod-data:
   certbot-www:
   certbot-conf:
+  portainer-prod-data:
