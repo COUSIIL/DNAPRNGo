@@ -16,7 +16,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/nuxt-base/package.json ./packages/nuxt-base/
 COPY apps/${APP}/package.json ./apps/${APP}/
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --filter ${APP}...
+    pnpm install --frozen-lockfile --filter ${APP}... --filter @repo/nuxt-base
 
 # ---- Dev: sources are bind-mounted by docker-compose.yml ----
 FROM base AS dev

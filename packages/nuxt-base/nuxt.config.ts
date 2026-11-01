@@ -1,3 +1,4 @@
+import { defineNuxtConfig } from 'nuxt/config'
 // Shared Nuxt layer. Every Nuxt app extends it:  extends: ['../../packages/nuxt-base']
 // Override at runtime with NUXT_PUBLIC_API_BASE / NUXT_API_BASE_INTERNAL.
 export default defineNuxtConfig({

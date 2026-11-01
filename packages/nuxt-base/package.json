@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Shared Nuxt layer: common config and composables for every Nuxt app of the monorepo",
-  "main": "./nuxt.config.ts"
+  "main": "./nuxt.config.ts",
+  "devDependencies": {
+    "nuxt": "^3.11.2"
+  }
 }
 
